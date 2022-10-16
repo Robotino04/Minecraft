@@ -1,4 +1,4 @@
-#include "Minecraft/UShort.hpp"
+#include "Minecraft/PacketData.hpp"
 
 #include <vector>
 #include <stdint.h>
@@ -13,9 +13,10 @@ int main(){
     };
 
 
-    Minecraft::UShort testUShort(value);
+    Minecraft::PacketData testData;
+    testData << value;
 
-    auto result = testUShort.toBytes();
+    auto result = testData.getBytes();
 
     if (result == correctResult)
         return 0;

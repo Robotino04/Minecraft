@@ -1,4 +1,4 @@
-#include "Minecraft/Boolean.hpp"
+#include "Minecraft/PacketData.hpp"
 
 #include <vector>
 #include <stdint.h>
@@ -12,10 +12,10 @@ int main(){
         0x01
     };
 
+    Minecraft::PacketData testData;
+    testData << value;
 
-    Minecraft::Boolean testBool(value);
-
-    auto result = testBool.toBytes();
+    auto result = testData.getBytes();
 
     if (result == correctResult)
         return 0;

@@ -1,4 +1,4 @@
-#include "Minecraft/String.hpp"
+#include "Minecraft/PacketData.hpp"
 
 #include <vector>
 #include <stdint.h>
@@ -12,9 +12,10 @@ int main(){
     };
 
 
-    Minecraft::String testStr(value);
+    Minecraft::PacketData testData;
+    testData << value;
 
-    auto result = testStr.toBytes();
+    auto result = testData.getBytes();
 
     if (result == correctResult)
         return 0;
