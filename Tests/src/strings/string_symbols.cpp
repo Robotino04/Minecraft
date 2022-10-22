@@ -1,4 +1,4 @@
-#include "Minecraft/PacketData.hpp"
+#include "Minecraft/PacketCoder.hpp"
 
 #include <vector>
 #include <stdint.h>
@@ -12,10 +12,10 @@ int main(){
     };
 
 
-    Minecraft::PacketData testData;
-    testData << value;
+    Minecraft::PacketCoder encoder;
+    encoder << value;
 
-    auto result = testData.getBytes();
+    auto result = encoder.getBytes();
 
     if (result == correctResult)
         return 0;
