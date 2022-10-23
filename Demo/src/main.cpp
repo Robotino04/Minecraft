@@ -15,15 +15,10 @@
 #include "Minecraft/PacketID.hpp"
 #include "Minecraft/PacketCoder.hpp"
 #include "Minecraft/ConnectionState.hpp"
+#include "Minecraft/BindTarget.hpp"
 
-void handleUnknownPacket(Minecraft::PacketID id, size_t length){
-    std::cout << "Unknown packet with ID: 0x"
-                << std::hex << std::setw(2) << std::setfill('0')
-                << static_cast<int>(id)
-                << " Length: 0x"
-                << length
-                << std::setw(0) << std::dec
-                << "\n";
+void handleUnknownPacket(Minecraft::PacketID id, Minecraft::ConnectionState state, size_t length){
+    std::cout << Minecraft::getPacketDescription(id, state, Minecraft::BindTarget::Client, length) << "\n";
 }
 
 int main(int argc, const char** argv){
@@ -124,12 +119,12 @@ int main(int argc, const char** argv){
                     state = Minecraft::ConnectionState::Play;
                 }
                 else
-                    handleUnknownPacket(id, length);
+                    handleUnknownPacket(id, state, length);
                 break;
             }
 
             default:{
-                handleUnknownPacket(id, length);
+                handleUnknownPacket(id, state, length);
                 break;
             }
         }
