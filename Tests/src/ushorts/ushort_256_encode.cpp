@@ -6,10 +6,9 @@
 #include <iomanip>
 
 int main(){
-    std::string value = "";
-
-    std::vector<uint8_t> correctResult = {
-        0x00,
+    const uint16_t value = 256;
+    const std::vector<uint8_t> correctResult = {
+        0x01, 0x00
     };
 
 

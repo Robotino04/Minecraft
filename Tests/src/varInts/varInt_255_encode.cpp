@@ -6,10 +6,9 @@
 #include <iomanip>
 
 int main(){
-    uint16_t value = 65535;
-
-    std::vector<uint8_t> correctResult = {
-        0xff, 0xff
+    const int32_t value = 255;
+    const std::vector<uint8_t> correctResult = {
+        0xff, 0x01
     };
 
 

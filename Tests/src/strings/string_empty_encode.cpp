@@ -6,11 +6,10 @@
 #include <iomanip>
 
 int main(){
-    uint16_t value = 1;
-
-    std::vector<uint8_t> correctResult = {
-        0x00, 0x01
+    const std::vector<uint8_t> correctResult = {
+        0x00,
     };
+    const std::string value = "";
 
 
     Minecraft::PacketCoder encoder;

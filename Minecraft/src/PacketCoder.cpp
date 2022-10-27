@@ -14,6 +14,14 @@ std::vector<uint8_t> PacketCoder::getBytes() const{
     return {bytes.begin(), bytes.end()};
 }
 
+std::vector<uint8_t> PacketCoder::getBytes(size_t numBytes) const{
+    std::unique_lock lock(mutex);
+
+    condition.wait(lock, [&](){return bytes.size() >= numBytes;});
+
+    return {bytes.begin(), std::next(bytes.begin(), numBytes)};
+}
+
 std::vector<uint8_t> PacketCoder::toPacket(PacketID id) const{
     std::unique_lock lock(mutex);
     PacketCoder encoder;
@@ -31,10 +39,10 @@ std::vector<uint8_t> PacketCoder::toPacket(PacketID id) const{
     return packet.getBytes();
 }
 
-size_t PacketCoder::getDecodedBytes(){
+size_t PacketCoder::getNumDecodedBytes(){
     std::unique_lock lock(mutex);
-    auto x = decodedBytes;
-    decodedBytes = 0;
+    auto x = numDecodedBytes;
+    numDecodedBytes = 0;
     return x;
 }
 void PacketCoder::ignore(size_t numBytes){
@@ -130,7 +138,7 @@ PacketCoder& PacketCoder::operator>> (bool& value){
     value = bytes.front();
     bytes.pop_front();
 
-    decodedBytes++;
+    numDecodedBytes++;
 
     return *this;
 }
@@ -140,25 +148,24 @@ PacketCoder& PacketCoder::operator>> (int32_t& value){
     static constexpr uint8_t CONTINUE_BIT = 0b10000000;
 
     uint32_t u_value = 0;
-    int shiftAmount=7;
+    int shiftAmount=0;
     uint8_t byte;
     do{
-        // wait for data
-        condition.wait(lock, [&](){return !bytes.empty();});
-        
-        byte
-        =
-        bytes.front();
-
-        bytes.pop_front();
-        u_value |= byte & DATA_BITS;
-        u_value << 7;
-        shiftAmount += 7;
-
         if (shiftAmount >= 32){
             throw std::runtime_error("VarInt to big!");
         }
-        decodedBytes++;
+
+        // wait for data
+        condition.wait(lock, [&](){return !bytes.empty();});
+        
+        byte = bytes.front();
+
+        bytes.pop_front();
+        numDecodedBytes++;
+
+        u_value |= (byte & DATA_BITS) << shiftAmount;
+        shiftAmount += 7;
+
     } while (byte & CONTINUE_BIT);
     value = static_cast<int32_t>(u_value);
     
@@ -179,7 +186,7 @@ PacketCoder& PacketCoder::operator>> (std::string& value){
     value.insert(value.begin(), bytes.begin(), std::next(bytes.begin(), length));
     bytes.erase(bytes.begin(), std::next(bytes.begin(), length));
 
-    decodedBytes += length;
+    numDecodedBytes += length;
     return *this;
 }
 PacketCoder& PacketCoder::operator>> (uint16_t& value){
@@ -193,7 +200,7 @@ PacketCoder& PacketCoder::operator>> (uint16_t& value){
     value |= bytes.front();
     bytes.pop_front();
 
-    decodedBytes += 2;
+    numDecodedBytes += 2;
     return *this;
 }
 

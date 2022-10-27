@@ -41,6 +41,17 @@ class PacketCoder{
         std::vector<uint8_t> getBytes() const;
 
         /**
+         * @brief Get a number of encoded bytes
+         * 
+         * This operation will block until the given
+         * number of bytes is available.
+         * 
+         * @param numBytes the number of bytes to return
+         * @return std::vector<uint8_t> the bytes
+         */
+        std::vector<uint8_t> getBytes(size_t numBytes) const;
+
+        /**
          * @brief Convert to a complete packet
          * 
          * @param id the packet id
@@ -53,7 +64,7 @@ class PacketCoder{
          * 
          * @return size_t number of bytes decoded since last calling this function
          */
-        size_t getDecodedBytes();
+        size_t getNumDecodedBytes();
 
         /**
          * @brief Ignore some bytes while decoding
@@ -164,10 +175,10 @@ class PacketCoder{
 
     private:
         std::deque<uint8_t> bytes;
-        size_t decodedBytes = 0;
+        size_t numDecodedBytes = 0;
 
         mutable std::mutex mutex;
-        std::condition_variable condition;
+        mutable std::condition_variable condition;
 };
 
 }

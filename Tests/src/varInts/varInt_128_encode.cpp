@@ -6,10 +6,9 @@
 #include <iomanip>
 
 int main(){
-    bool value = false;
-
-    std::vector<uint8_t> correctResult = {
-        0x00
+    const int32_t value = 128;
+    const std::vector<uint8_t> correctResult = {
+        0x80, 0x01
     };
 
 
@@ -21,7 +20,7 @@ int main(){
     if (result == correctResult)
         return 0;
     else{
-        std::cout << "Tested value: " << std::boolalpha << value << "\n";
+        std::cout << "Tested value: " << value << "\n";
 
         std::cout << "Correct bytes:" << std::hex;
         for (auto byte : correctResult){

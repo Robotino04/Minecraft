@@ -6,10 +6,9 @@
 #include <iomanip>
 
 int main(){
-    int value = -2147483648;
-
-    std::vector<uint8_t> correctResult = {
-        0x80, 0x80, 0x80, 0x80, 0x08
+    const int32_t value = 2;
+    const std::vector<uint8_t> correctResult = {
+        0x02
     };
 
 
