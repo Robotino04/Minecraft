@@ -6,10 +6,9 @@
 #include <iomanip>
 
 int main(){
-    int value = 2147483647;
-
-    std::vector<uint8_t> correctResult = {
-        0xff, 0xff, 0xff, 0xff, 0x07
+    const uint16_t value = 255;
+    const std::vector<uint8_t> correctResult = {
+        0x00, 0xff
     };
 
 

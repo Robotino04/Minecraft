@@ -6,11 +6,11 @@
 #include <iomanip>
 
 int main(){
-    bool value = true;
-
-    std::vector<uint8_t> correctResult = {
-        0x01
+    const bool value = false;
+    const std::vector<uint8_t> correctResult = {
+        0x00
     };
+
 
     Minecraft::PacketCoder encoder;
     encoder << value;
