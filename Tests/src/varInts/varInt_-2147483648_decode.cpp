@@ -1,4 +1,7 @@
 #include "Minecraft/PacketCoder.hpp"
+#include "Minecraft/VarInt.hpp"
+#include "Minecraft/Testing/TestSource.hpp"
+#include "Minecraft/Utils/IO.hpp"
 
 #include <vector>
 #include <stdint.h>
@@ -6,27 +9,22 @@
 #include <iomanip>
 
 int main(){
-    const std::vector<uint8_t> value = {
+    const std::deque<uint8_t> testedBytes = {
         0x80, 0x80, 0x80, 0x80, 0x08
     };
-    const int32_t correctResult = -2147483648;
+    using TestedType = Minecraft::VarInt;
+    const TestedType correctResult = -2147483648;
 
+    Minecraft::Testing::TestSource value(testedBytes);
 
-    Minecraft::PacketCoder encoder;
-    encoder << value;
-
-    int32_t result;
-    encoder >> result;
+    TestedType result;
+    Minecraft::PacketCoder::decode(value, result);
 
     if (result == correctResult)
         return 0;
     else{
-        std::cout << "Tested bytes:" << std::hex;
-        for (auto byte : value){
-            std::cout << " 0x" << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
-        }
-        std::cout << std::dec << "\n";
-        std::cout << "Correct result: " << correctResult << "\n";
+        std::cout << "Tested bytes: {" << Minecraft::Utils::formatByteArray(testedBytes.begin(), testedBytes.end()) << "}\n";
+        std::cout << "Correct result:   " << correctResult << "\n";
         std::cout << "Generated result: " << result << "\n";
 
         return 1;
