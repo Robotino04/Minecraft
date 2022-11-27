@@ -4,6 +4,7 @@
 #include <chrono>
 #include <thread>
 #include <fstream>
+#include <tuple>
 
 #include <strings.h>
 #include <cstring>
@@ -27,6 +28,48 @@ void printHelp(std::string const& argv0){
               << "-H, --host <host>\t Connect to the given host.\n\t"
               << "-h, --help\t\t Print this help.\n";
 }
+void printMissingArgument(std::string const& required, std::string const& arg, std::string const& argv0){
+    std::cout << "No " << required << " given after \"" << arg << "\"!\nSee " << argv0 << " --help for usage.\n";
+}
+
+
+struct HandshakePacket{
+    Minecraft::VarInt protocolVersion;
+    std::string host;
+    uint16_t port;
+    Minecraft::VarInt newConnectionState;
+
+    PACKET_CONTENTS(
+        protocolVersion,
+        host,
+        port,
+        newConnectionState
+    )
+};
+
+struct LoginStartPacket{
+    std::string name;
+    bool hasSigData;
+    Minecraft::Conditional<int64_t> timestamp = Minecraft::Conditional<int64_t>(hasSigData);
+    Minecraft::Conditional<Minecraft::VarInt> publicKeyLength = Minecraft::Conditional<Minecraft::VarInt>(hasSigData);
+    Minecraft::Conditional<std::vector<uint8_t>> publicKey = Minecraft::Conditional<std::vector<uint8_t>>(hasSigData);
+    Minecraft::Conditional<Minecraft::VarInt> signatureLength = Minecraft::Conditional<Minecraft::VarInt>(hasSigData);
+    Minecraft::Conditional<std::vector<uint8_t>> signature = Minecraft::Conditional<std::vector<uint8_t>>(hasSigData);
+    bool hasPlayerUUID;
+    // Minecraft::Conditional<Minecraft::UUID> playerUUID = Minecraft::Conditional<Minecraft::UUID>(hasPlayerUUID);
+
+
+    PACKET_CONTENTS(
+        name,
+        hasSigData,
+        timestamp,
+        publicKeyLength,
+        publicKey,
+        signatureLength,
+        signature,
+        hasPlayerUUID
+    )
+};
 
 int main(int argc, const char** argv){
     bool doLogData = false;
@@ -36,37 +79,36 @@ int main(int argc, const char** argv){
     uint16_t port = 25565;
 
     {
-        int i=1;
-        while (i<argc){
-            std::string arg = argv[i++];
+        for (int i=1; i<argc; i++){
+            std::string arg = argv[i];
             if (arg == "--log-data"){
                 doLogData = true;
             }
             else if (arg == "--dump-packets"){
                 doDumpPackets = true;
                 if (i != argc){
-                    dumpLocation = argv[i++];
+                    dumpLocation = argv[++i];
                 }
                 else{
-                    std::cout << "No file given after \"" << arg << "\"!\nSee " << argv[0] << " --help for usage.\n";
+                    printMissingArgument("file", arg, argv[0]);
                     exit(1);
                 }
             }
             else if (arg == "-p" || arg == "--port"){
                 if (i != argc){
-                    port = std::stoi(argv[i++]);
+                    port = std::stoi(argv[++i]);
                 }
                 else{
-                    std::cout << "No port given after \"" << arg << "\"!\nSee " << argv[0] << " --help for usage.\n";
+                    printMissingArgument("port", arg, argv[0]);
                     exit(1);
                 }
             }
             else if (arg == "-H" || arg == "--host"){
                 if (i != argc){
-                    host = argv[i++];
+                    host = argv[++i];
                 }
                 else{
-                    std::cout << "No host given after \"" << arg << "\"!\nSee " << argv[0] << " --help for usage.\n";
+                    printMissingArgument("host", arg, argv[0]);
                     exit(1);
                 }
             }
@@ -92,6 +134,9 @@ int main(int argc, const char** argv){
     Minecraft::Client::Client client(host, port);
     Minecraft::ConnectionState state = Minecraft::ConnectionState::Handshaking;
 
+    std::cout << "Waiting for keypress before connecting...\n";
+    std::cin.get();
+
     if (!client.connect()){
         std::cout << "Connecting failed!\n";
         return 1;
@@ -103,73 +148,44 @@ int main(int argc, const char** argv){
 
     // C→S: Handshake with Next State set to 2 (login)
     {
-        Minecraft::PacketCoder encoder;
-        encoder << (int32_t) 760
-                << host
-                << port
-                << static_cast<int32_t>(Minecraft::ConnectionState::Login);
-
-        if (!client.sendData(encoder.toPacket(Minecraft::PacketID::Handshake))){
-            std::cout << "sending handshakePacket failed!\n";
-        }
-        else{
-            std::cout << "sending handshakePacket succeeded!\n";
-            state = Minecraft::ConnectionState::Login;
-        }
+        HandshakePacket packet{
+            .protocolVersion = 760,
+            .host = host,
+            .port = port,
+            .newConnectionState = static_cast<int>(Minecraft::ConnectionState::Login),
+        };
+        
+        Minecraft::PacketCoder::encodePacket(client.getSink(), Minecraft::PacketID::Handshake, packet);
+        state = Minecraft::ConnectionState::Login;
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
     // C→S: Login Start
     {
-        Minecraft::PacketCoder encoder;
-        encoder << std::string("MinecraftBot")
-                << false
-                << false;
+        LoginStartPacket packet;
+        packet.name = "MinecraftBot";
+        packet.hasSigData = false;
+        packet.hasPlayerUUID = false;
 
-        if (!client.sendData(encoder.toPacket(Minecraft::PacketID::Handshake))){
-            std::cout << "sending loginStartPacket failed!\n";
-        }
-        else{
-            std::cout << "sending loginStartPacket succeeded!\n";
-        }
+        Minecraft::PacketCoder::encodePacket(client.getSink(), Minecraft::PacketID::LoginStart, packet);
     }
 
+    std::cout << "Login initiated.\n";
 
     // S→C: Login Success
-
-    Minecraft::PacketCoder decoder;
-
-    // start another thread to continuously read the incoming data
-    bool dataRecieveThreadRunning = true; 
-    std::thread dataRecieveThread([&](){
-        std::ofstream logFile;
-        if (doDumpPackets) logFile.open(dumpLocation, std::ios::binary);
-        while (dataRecieveThreadRunning){
-            auto data = client.readData();
-            
-            decoder << data;
-            if (doDumpPackets) logFile.write((const char*)data.data(), data.size());
-        }
-    });
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
     while (true){
-        int32_t idInt;
+        Minecraft::VarInt idInt;
 
-        int32_t length;
+        Minecraft::VarInt length;
         Minecraft::PacketID id;
 
 
-        decoder >> length;
-        decoder.getNumDecodedBytes();
-        decoder >> idInt;
+        Minecraft::PacketCoder::decode(client.getSource(), length);
+        size_t dataLength = length - Minecraft::PacketCoder::decode(client.getSource(), idInt);
 
-        size_t dataLength = length - decoder.getNumDecodedBytes();
+        auto data = client.getSource().pullBytes(dataLength);
 
-        auto data = decoder.getBytes(dataLength);
-        decoder.ignore(dataLength);
-        id = static_cast<Minecraft::PacketID>(idInt);
+        id = static_cast<Minecraft::PacketID>(idInt.value);
 
         std::cout << Minecraft::getPacketDescription(id, state, Minecraft::BindTarget::Client, length);
         std::cout << std::hex << std::uppercase << std::setfill('0');
@@ -193,9 +209,6 @@ int main(int argc, const char** argv){
         }
     }
 
-    dataRecieveThreadRunning = false;
-    dataRecieveThread.join();
-    
 
     if (!client.disconnect()){
         std::cout << "Disconnecting failed!\n";

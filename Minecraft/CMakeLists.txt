@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.12)
 
 include(FindPythonInterp)
 
@@ -15,3 +15,4 @@ list(APPEND MINECRAFT_SRC "${PROJECT_SOURCE_DIR}/Minecraft/src/include/Minecraft
 
 add_library(minecraft STATIC ${MINECRAFT_SRC})
 target_include_directories(minecraft PUBLIC "src/include/")
+target_compile_features(minecraft PUBLIC cxx_std_20)

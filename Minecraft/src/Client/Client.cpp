@@ -44,6 +44,9 @@ bool Client::connect(){
     if (::connect(serverFD, (const sockaddr*) &serverAddress, sizeof(serverAddress)) != 0)
         return false;
     
+
+    recvEnd.start(serverFD);
+    sendEnd.start(serverFD);
     connected = true;
     return true;
 }
@@ -58,22 +61,27 @@ bool Client::disconnect(){
     connected = false;
     return true;
 }
-
-
-bool Client::sendData(std::vector<uint8_t> const& data){
-    return send(serverFD, data.data(), data.size(), 0) == data.size();
+DataSink& Client::getSink(){
+    return sendEnd;
+}
+        
+      
+DataSource& Client::getSource(){
+    return recvEnd;
 }
 
-std::vector<uint8_t> Client::readData(size_t numBytes){
-    std::vector<uint8_t> data;
-    data.resize(numBytes);
-    int readBytes = read(serverFD, data.data(), data.size());
-    if (readBytes == -1){
-        throw std::runtime_error("Reading data from server failed!");
-    }
 
-    data.resize(readBytes);
-    return data;
-}
+
+// std::vector<uint8_t> Client::readData(size_t numBytes){
+//     std::vector<uint8_t> data;
+//     data.resize(numBytes);
+//     int readBytes = read(serverFD, data.data(), data.size());
+//     if (readBytes == -1){
+//         throw std::runtime_error("Reading data from server failed!");
+//     }
+
+//     data.resize(readBytes);
+//     return data;
+// }
 
 }

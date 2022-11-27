@@ -1,12 +1,16 @@
 #pragma once
 
 #include "Minecraft/PacketID.hpp"
+#include "Minecraft/VarInt.hpp"
+#include "Minecraft/Conditional.hpp"
+#include "Minecraft/Utils/Concepts.hpp"
+#include "Minecraft/DataSink.hpp"
+#include "Minecraft/DataSource.hpp"
 
 #include <deque>
-#include <vector>
 #include <string>
-#include <condition_variable>
-#include <mutex>
+#include <concepts>
+#include <vector>
 
 #include <stdint.h>
 #include <stddef.h>
@@ -14,171 +18,157 @@
 namespace Minecraft{
 
 /**
- * @brief An encoder and decoder for Minecraft packets
+ * @brief An en- and decodable thing
  * 
- * Allows for simultaneous encoding and decoding by one thread each.
+ * Must have a ```contents()``` function returning a
+ * tuple of the data to be processed.
+ */
+template<typename T>
+concept Codable = requires{
+    std::declval<T>().contents();
+    std::declval<const T>().contents();
+};
+
+/**
+ * @brief Declare all functions to make a struct a *Codable*.
+ * 
+ */
+#define PACKET_CONTENTS(...) \
+    auto contents() { \
+        return std::forward_as_tuple( \
+            __VA_ARGS__ \
+        ); \
+    } \
+    auto contents() const{ \
+        return std::forward_as_tuple( \
+            __VA_ARGS__ \
+        ); \
+    }
+
+/**
+ * 
+ * @brief Encodes/Decodes objects to/from bytes
+ * 
+ * @tparam T the type of object
+ */
+template<typename T>
+struct PacketCoderImpl;
+
+
+/**
+ * @brief An encoder and decoder for Minecraft packets.
  */
 class PacketCoder{
     public:
         /**
-         * @brief Construct an empty Packet Data object
+         * @brief Encode an object as bytes.
          * 
+         * @tparam T the type of object
+         * @param bytes the bytes to encode to
+         * @param t the object to encode
+         * @return size_t the number of bytes used to encode the object
          */
-        PacketCoder();
+        template<typename T>
+        static size_t encode(std::deque<uint8_t>& bytes, T const& t){
+            return PacketCoderImpl<T>::encode(bytes, t);
+        }
 
         /**
-         * @brief Construct a new Packet Coder object from bytes
+         * @brief Encode a packet and push it into the sink.
          * 
-         * @param data the bytes
-         */
-        PacketCoder(std::vector<uint8_t> const& data);
-
-        /**
-         * @brief Get the encoded bytes
-         * 
-         * @return std::vector<uint8_t> the bytes
-         */
-        std::vector<uint8_t> getBytes() const;
-
-        /**
-         * @brief Get a number of encoded bytes
-         * 
-         * This operation will block until the given
-         * number of bytes is available.
-         * 
-         * @param numBytes the number of bytes to return
-         * @return std::vector<uint8_t> the bytes
-         */
-        std::vector<uint8_t> getBytes(size_t numBytes) const;
-
-        /**
-         * @brief Convert to a complete packet
-         * 
+         * @tparam T the type holding the packet contentd
+         * @param sink the sink the packet gets pushed to
          * @param id the packet id
-         * @return std::vector<uint8_t> bytes of the full packet
+         * @param t the packet data
+         * @return size_t the number of bytes used to encode the object
          */
-        std::vector<uint8_t> toPacket(PacketID id) const;
+        template<typename T>
+        static size_t encodePacket(DataSink& sink, PacketID id, T const& t){
+            size_t usedBytes = 0;
+
+            Minecraft::VarInt packetID = static_cast<int32_t>(id);
+            Minecraft::VarInt dataSize;
+
+            std::deque<uint8_t> data;
+            usedBytes += PacketCoder::encode(data, t);
+
+            {
+                std::deque<uint8_t> tmp;
+                usedBytes += PacketCoder::encode(tmp, packetID);
+            }
+            dataSize = usedBytes;
+
+            std::deque<uint8_t> header;
+            usedBytes += PacketCoder::encode(header, dataSize);
+            PacketCoder::encode(header, packetID);
+
+            // join header and data
+            data.insert(data.begin(), header.begin(), header.end());
+
+            sink.pushBytes(data);
+            return usedBytes;
+        }
 
         /**
-         * @brief Get the number of decoded bytes
+         * @brief Decode an object from bytes.
          * 
-         * @return size_t number of bytes decoded since last calling this function
+         * @tparam T the type of object
+         * @param bytes the bytes to decode from
+         * @param t the object to decode into
+         * @return size_t the number of bytes used to decode the object
          */
-        size_t getNumDecodedBytes();
-
-        /**
-         * @brief Ignore some bytes while decoding
-         * 
-         * @param numBytes number of bytes to ignore
-         */
-        void ignore(size_t numBytes);
-
-        /**
-         * @brief Get number of encoded bytes
-         * 
-         * @return size_t number of bytes in this instance
-         */
-        size_t size() const;
-
-        /**
-         * @brief Encode a boolean
-         * 
-         * @param value the boolean
-         * @return PacketCoder& this instance
-         */
-        PacketCoder& operator<< (bool value);
-
-        /**
-         * @brief Encode a var int
-         * 
-         * Converts from an int32_t to a Minecraft var int.
-         * 
-         * @param value the integer
-         * @return PacketCoder& this instance
-         */
-        PacketCoder& operator<< (int32_t value);
-
-        /**
-         * @brief Encode a string
-         * 
-         * @param value the string
-         * @return PacketCoder& this instance
-         */
-        PacketCoder& operator<< (std::string value);
-
-        /**
-         * @brief Encode an unsigned short.
-         * 
-         * Converts to the correct endiannes.
-         * 
-         * @param value the ushort
-         * @return PacketCoder& this instance
-         */
-        PacketCoder& operator<< (uint16_t value);
-
-        /**
-         * @brief Insert raw bytes
-         * 
-         * @param rawBytes bytes to insert
-         * @return PacketCoder& this instance
-         */
-        PacketCoder& operator<< (std::vector<uint8_t> const& rawBytes);
-
-        /**
-         * @brief Insert raw bytes
-         * 
-         * @param rawBytes bytes to insert
-         * @return PacketCoder& this instance
-         */
-        PacketCoder& operator<< (std::deque<uint8_t> const& rawBytes);
+        template<typename T>
+        static size_t decode(DataSource& source, T& t){
+            return PacketCoderImpl<T>::decode(source, t);
+        }
+};
 
 
+template<Codable T>
+struct PacketCoderImpl<T>{
+    static size_t decode(DataSource& source, T& t);
+    static size_t encode(std::deque<uint8_t>& bytes, T const& t);
+};
+template<>
+struct PacketCoderImpl<bool>{
+    static size_t decode(DataSource& source, bool& t);
+    static size_t encode(std::deque<uint8_t>& bytes, bool const& t);
+};
 
-        /**
-         * @brief Decode a boolean
-         * 
-         * @param value the boolean
-         * @return PacketCoder& this instance
-         */
-        PacketCoder& operator>> (bool& value);
+template<>
+struct PacketCoderImpl<std::string>{
+    static size_t decode(DataSource& source, std::string& t);
+    static size_t encode(std::deque<uint8_t>& bytes, std::string const& t);
+};
 
-        /**
-         * @brief Decode a var int
-         * 
-         * Converts from an int32_t to a Minecraft var int.
-         * 
-         * @param value the integer
-         * @return PacketCoder& this instance
-         */
-        PacketCoder& operator>> (int32_t& value);
+template<uint SIZE>
+struct PacketCoderImpl<VarInteger<SIZE>>{
+    static size_t decode(DataSource& source, VarInteger<SIZE>& t);
+    static size_t encode(std::deque<uint8_t>& bytes, VarInteger<SIZE> const& t);
 
-        /**
-         * @brief Decode a string
-         * 
-         * @param value the string
-         * @return PacketCoder& this instance
-         */
+    static constexpr uint8_t DATA_BITS = 0b01111111;
+    static constexpr uint8_t CONTINUE_BIT = 0b10000000;
 
-        PacketCoder& operator>> (std::string& value);
+};
 
-        /**
-         * @brief Decode an unsigned short.
-         * 
-         * Converts to the correct endiannes.
-         * 
-         * @param value the ushort
-         * @return PacketCoder& this instance
-         */
-        PacketCoder& operator>> (uint16_t& value);
+template<Utils::Concepts::integer T>
+struct PacketCoderImpl<T>{
+    static size_t decode(DataSource& source, T& t);
+    static size_t encode(std::deque<uint8_t>& bytes, T const& t);
+};
 
-        
+template<typename T>
+struct PacketCoderImpl<Conditional<T>>{
+    static size_t decode(DataSource& source, Conditional<T>& t);
+    static size_t encode(std::deque<uint8_t>& bytes, Conditional<T> const& t);
+};
 
-    private:
-        std::deque<uint8_t> bytes;
-        size_t numDecodedBytes = 0;
-
-        mutable std::mutex mutex;
-        mutable std::condition_variable condition;
+template<typename T>
+struct PacketCoderImpl<std::vector<T>>{
+    static size_t decode(DataSource& source, std::vector<T>& t);
+    static size_t encode(std::deque<uint8_t>& bytes, std::vector<T> const& t);
 };
 
 }
+
+#include "Minecraft/PacketCoder.ipp"

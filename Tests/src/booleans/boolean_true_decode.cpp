@@ -1,4 +1,6 @@
 #include "Minecraft/PacketCoder.hpp"
+#include "Minecraft/Testing/TestSource.hpp"
+#include "Minecraft/Utils/IO.hpp"
 
 #include <vector>
 #include <stdint.h>
@@ -6,27 +8,22 @@
 #include <iomanip>
 
 int main(){
-    const std::vector<uint8_t> value = {
+    const std::deque<uint8_t> testedBytes = {
         0x01
     };
-    const bool correctResult = true;
+    using TestedType = bool;
+    const TestedType correctResult = true;
 
+    Minecraft::Testing::TestSource value(testedBytes);
 
-    Minecraft::PacketCoder encoder;
-    encoder << value;
-
-    bool result;
-    encoder >> result;
+    TestedType result;
+    Minecraft::PacketCoder::decode(value, result);
 
     if (result == correctResult)
         return 0;
     else{
-        std::cout << "Tested bytes:" << std::hex;
-        for (auto byte : value){
-            std::cout << " 0x" << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
-        }
-        std::cout << std::dec << "\n";
-        std::cout << "Correct result: " << std::boolalpha << correctResult << "\n";
+        std::cout << "Tested bytes: {" << Minecraft::Utils::formatByteArray(testedBytes.begin(), testedBytes.end()) << "}\n";
+        std::cout << "Correct result:   " << std::boolalpha << correctResult << "\n";
         std::cout << "Generated result: " << std::boolalpha << result << "\n";
 
         return 1;

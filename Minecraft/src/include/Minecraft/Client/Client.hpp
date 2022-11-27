@@ -4,6 +4,10 @@
 #include <netdb.h>
 #include <vector>
 
+#include "Minecraft/SendingConnectionEndpoint.hpp"
+#include "Minecraft/ReceivingConnectionEndpoint.hpp"
+#include "Minecraft/DataSink.hpp"
+#include "Minecraft/DataSource.hpp"
 namespace Minecraft::Client{
 
 class Client{
@@ -17,7 +21,7 @@ class Client{
         Client(std::string const& host, int port=25565);
 
         /**
-         * @brief Destroy the Client object and disconnect
+         * @brief Destroy the Client object and disconnect.
          * 
          */
         ~Client();
@@ -33,7 +37,7 @@ class Client{
         bool connect();
 
         /**
-         * @brief Disconnect from server
+         * @brief Disconnect from server.
          * 
          * Disconnects the socket from the server
          * and logs off if this client was logged
@@ -44,22 +48,18 @@ class Client{
         bool disconnect();
 
         /**
-         * @brief Send data to server
+         * @brief Get the Sink object.
          * 
-         * Sends the bytes in the vector.
-         * 
-         * @param data the bytes to send
-         * @return whether sending succeeded
+         * @return DataSink& sink for sending data to the server
          */
-        bool sendData(std::vector<uint8_t> const& data);
-
+        DataSink& getSink();
+        
         /**
-         * @brief Read data from server
+         * @brief Get the Source object.
          * 
-         * @param numBytes the maximum number of bytes to read
-         * @return std::vector<uint8_t> 
+         * @return DataSource& source for recieving data from the server
          */
-        std::vector<uint8_t> readData(size_t numBytes = 1024);
+        DataSource& getSource();
         
 
     private:
@@ -68,6 +68,8 @@ class Client{
         bool connected = false;
 
         int serverFD;
+        ReceivingConnectionEndpoint recvEnd;
+        SendingConnectionEndpoint sendEnd; 
 };
 
 }
