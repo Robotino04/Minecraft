@@ -4,6 +4,8 @@
 
 #include <array>
 
+#include <iostream>
+
 namespace Minecraft{
 
 ReceivingConnectionEndpoint::ReceivingConnectionEndpoint(): FD(-1){
@@ -20,6 +22,11 @@ void ReceivingConnectionEndpoint::start(int fileDescriptor){
     FD = fileDescriptor;
     spawnWorkerThread();
 }
+
+void ReceivingConnectionEndpoint::setCallback(Callback callback){
+    this->callback = callback;
+}
+
 uint8_t ReceivingConnectionEndpoint::pullByte(){
     std::unique_lock lock(mutex);
 
@@ -78,19 +85,29 @@ std::deque<uint8_t> ReceivingConnectionEndpoint::readBytes(size_t n) const{
 void ReceivingConnectionEndpoint::spawnWorkerThread(){
     sendingThread = std::thread([&](){
         std::unique_lock lock(mutex);
+        lock.unlock();
 
         std::array<uint8_t, 1024> intermediateBuffer;
 
         while (!stopSending){
-            conditionVar.wait(lock, [&](){return buffer.size() <= 1 && !stopSending;});
-            if (stopSending) break;
+            int availableBytes = recv(FD, intermediateBuffer.data(), intermediateBuffer.size(), 0);
+            lock.lock();
+            if (availableBytes == -1){
+                if (errno == EBADF){
+                    // the socket got closed to stop the thread
+                    break;
+                }
+                else{
+                    perror("ReceivingConnectionEndpoint socket");
+                }
+            }
 
-            size_t availableBytes = std::min(buffer.size(), intermediateBuffer.size());
+            buffer.insert(buffer.end(), intermediateBuffer.begin(), std::next(intermediateBuffer.begin(), availableBytes));
 
-            std::copy(buffer.begin(), std::next(buffer.begin(), availableBytes), intermediateBuffer.begin());
+            callback(std::prev(buffer.end(), availableBytes), buffer.end());
 
-            int sentBytes = send(FD, intermediateBuffer.data(), availableBytes, 0);
-            buffer.erase(buffer.begin(), std::next(buffer.begin(), sentBytes));
+            lock.unlock();
+            conditionVar.notify_one();
         }
     });
 }

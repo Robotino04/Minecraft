@@ -22,6 +22,11 @@ void SendingConnectionEndpoint::start(int fileDescriptor){
     stopSending = false;
     spawnWorkerThread();
 }
+
+void SendingConnectionEndpoint::setCallback(Callback callback){
+    this->callback = callback;
+}
+
 void SendingConnectionEndpoint::pushByte(uint8_t byte){
     std::unique_lock lock(mutex);
 
@@ -56,6 +61,8 @@ void SendingConnectionEndpoint::spawnWorkerThread(){
             int sentBytes = send(FD, intermediateBuffer.data(), availableBytes, 0);
             if (sentBytes == -1) continue;
             buffer.erase(buffer.begin(), std::next(buffer.begin(), sentBytes));
+            
+            callback(buffer.begin(), std::next(buffer.begin(), sentBytes));
         }
     });
 }

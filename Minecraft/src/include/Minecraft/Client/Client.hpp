@@ -3,6 +3,7 @@
 #include <string>
 #include <netdb.h>
 #include <vector>
+#include <functional>
 
 #include "Minecraft/SendingConnectionEndpoint.hpp"
 #include "Minecraft/ReceivingConnectionEndpoint.hpp"
@@ -39,9 +40,7 @@ class Client{
         /**
          * @brief Disconnect from server.
          * 
-         * Disconnects the socket from the server
-         * and logs off if this client was logged
-         * on to the server.
+         * Disconnects the socket from the server.
          * 
          * @returns whether disconnecting succeeded
         */
@@ -50,16 +49,16 @@ class Client{
         /**
          * @brief Get the Sink object.
          * 
-         * @return DataSink& sink for sending data to the server
+         * @return SendingConnectionEndpoint& sink for sending data to the server
          */
-        DataSink& getSink();
+        SendingConnectionEndpoint& getSink();
         
         /**
          * @brief Get the Source object.
          * 
-         * @return DataSource& source for recieving data from the server
+         * @return ReceivingConnectionEndpoint& source for recieving data from the server
          */
-        DataSource& getSource();
+        ReceivingConnectionEndpoint& getSource();
         
 
     private:
