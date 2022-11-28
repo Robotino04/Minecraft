@@ -55,18 +55,20 @@ bool Client::disconnect(){
     if (!connected)
         return false;
     
+    if (shutdown(serverFD, SHUT_RD) != 0)
+        return false;
     if (close(serverFD) != 0)
         return false;
     
     connected = false;
     return true;
 }
-DataSink& Client::getSink(){
+SendingConnectionEndpoint& Client::getSink(){
     return sendEnd;
 }
         
       
-DataSource& Client::getSource(){
+ReceivingConnectionEndpoint& Client::getSource(){
     return recvEnd;
 }
 

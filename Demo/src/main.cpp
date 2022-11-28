@@ -5,6 +5,7 @@
 #include <thread>
 #include <fstream>
 #include <tuple>
+#include <future>
 
 #include <strings.h>
 #include <cstring>
@@ -71,17 +72,29 @@ struct LoginStartPacket{
     )
 };
 
+struct KeepAlivePacket{
+    int64_t keepAliveID;
+
+    PACKET_CONTENTS(
+        keepAliveID
+    )
+};
+
 int main(int argc, const char** argv){
     bool doLogData = false;
     bool doDumpPackets = false;
     std::string dumpLocation = "data.bin";
     std::string host = "127.0.0.1";
-    uint16_t port = 25565;
+    uint16_t port = 25566;
 
     {
         for (int i=1; i<argc; i++){
             std::string arg = argv[i];
-            if (arg == "--log-data"){
+            if (arg == "-h" || arg == "--help"){
+                printHelp(argv[0]);
+                exit(0);
+            }
+            else if (arg == "--log-data"){
                 doLogData = true;
             }
             else if (arg == "--dump-packets"){
@@ -112,10 +125,6 @@ int main(int argc, const char** argv){
                     exit(1);
                 }
             }
-            else if (arg == "-h" || arg == "--help"){
-                printHelp(argv[0]);
-                exit(0);
-            }
         }
     }
 
@@ -132,6 +141,18 @@ int main(int argc, const char** argv){
 
 
     Minecraft::Client::Client client(host, port);
+
+    std::ofstream dumpFile;
+
+    if (doDumpPackets){
+        dumpFile.open(dumpLocation, std::ios::binary);
+        client.getSource().setCallback([&](auto begin, auto end){
+            for (auto byteIt = begin; byteIt != end; byteIt++){
+                dumpFile.write(reinterpret_cast<char*>(&*byteIt), 1);
+            }
+        });
+    }
+
     Minecraft::ConnectionState state = Minecraft::ConnectionState::Handshaking;
 
     std::cout << "Waiting for keypress before connecting...\n";
@@ -172,31 +193,26 @@ int main(int argc, const char** argv){
 
     std::cout << "Login initiated.\n";
 
+    Minecraft::VarInt idInt;
+
+    Minecraft::VarInt length;
+    Minecraft::PacketID id;
+    
+    size_t dataLength;
+
+    bool running = true;
+
+    auto inputHandlerFuture = std::async(std::launch::async, [&](){
+        std::string word;
+        while ((std::cin >> word, word) != "end");
+        running = false;
+    });
+
     // S→C: Login Success
-    while (true){
-        Minecraft::VarInt idInt;
-
-        Minecraft::VarInt length;
-        Minecraft::PacketID id;
-
-
+    while (running){
         Minecraft::PacketCoder::decode(client.getSource(), length);
-        size_t dataLength = length - Minecraft::PacketCoder::decode(client.getSource(), idInt);
-
-        auto data = client.getSource().pullBytes(dataLength);
-
+        dataLength = length - Minecraft::PacketCoder::decode(client.getSource(), idInt);
         id = static_cast<Minecraft::PacketID>(idInt.value);
-
-        std::cout << Minecraft::getPacketDescription(id, state, Minecraft::BindTarget::Client, length);
-        std::cout << std::hex << std::uppercase << std::setfill('0');
-        if (doLogData){
-            std::cout << " ---";
-            for (auto byte : data){
-                std::cout << " " << std::setw(2) << static_cast<int>(byte);
-            }
-        std::cout << " ---";
-        }
-        std::cout << std::dec << std::nouppercase << std::setw(0) << "\n";
 
         switch(id){
             case Minecraft::PacketID::LoginSuccess:{
@@ -206,7 +222,35 @@ int main(int argc, const char** argv){
                 }
                 break;
             }
+            case Minecraft::PacketID::KeepAlive_Play_Client:{
+                if (state == Minecraft::ConnectionState::Play){
+                    KeepAlivePacket packet;
+                    dataLength -= Minecraft::PacketCoder::decode(client.getSource(), packet);
+
+                    // respond with the same contents
+                    Minecraft::PacketCoder::encodePacket(client.getSink(), Minecraft::PacketID::KeepAlive_Play_Server, packet);
+                    std::cout << ".";
+                }
+                break;
+            }
+            default:{
+                auto data = client.getSource().pullBytes(dataLength);
+                dataLength = 0;
+
+                std::cout << Minecraft::getPacketDescription(id, state, Minecraft::BindTarget::Client, length);
+                if (doLogData){
+                    std::cout << std::hex << std::uppercase << std::setfill('0');
+                    std::cout << " ---";
+                    for (auto byte : data){
+                        std::cout << " " << std::setw(2) << static_cast<int>(byte);
+                    }
+                    std::cout << " ---";
+                    std::cout << std::dec << std::nouppercase << std::setw(0);
+                }
+                std::cout << "\n";
+            }
         }
+        client.getSource().pullBytes(dataLength);
     }
 
 

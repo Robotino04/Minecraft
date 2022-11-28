@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <thread>
 #include <vector>
+#include <functional>
 
 #include <stdint.h>
 
@@ -44,6 +45,15 @@ class SendingConnectionEndpoint : public DataSink{
          */
         void start(int fileDescriptor);
 
+        using Callback = std::function<void(std::deque<uint8_t>::iterator begin, std::deque<uint8_t>::iterator end)>;
+
+        /**
+         * @brief Set the callback for sending bytes.
+         * 
+         * @param Callback the function to be called after bytes are sent
+         */
+        void setCallback(Callback callback);
+
         void pushByte(uint8_t byte) override;
         void pushBytes(std::deque<uint8_t> const& bytes) override;
     
@@ -57,6 +67,8 @@ class SendingConnectionEndpoint : public DataSink{
         std::deque<uint8_t> buffer;
         std::thread sendingThread;
         bool stopSending = false;
+
+        Callback callback = [](auto, auto){};
 
         std::condition_variable conditionVar;
         std::mutex mutex;
