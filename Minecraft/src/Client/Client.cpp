@@ -7,16 +7,14 @@
 
 namespace Minecraft::Client{
 
-Client::Client(std::string const& host, int port){
-    this->host = host;
-    this->port = port;
+Client::Client(){
 }
 
 Client::~Client(){
     disconnect();
 }
 
-bool Client::connect(){
+bool Client::connect(std::string const& host, int port){
     if (connected)
         return false;
 

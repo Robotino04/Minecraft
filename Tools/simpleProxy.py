@@ -8,6 +8,10 @@ class ExampleBridge(Bridge):
         global numPackets
         numPackets += 1
 
+        if (name == "join_game"):
+            numPackets = 0
+            print("-- new connection --")
+
         if direction == "downstream":
             if (numPackets < 10): print(f"[S->C] {name}")
             self.downstream.send_packet(name, buff.read())

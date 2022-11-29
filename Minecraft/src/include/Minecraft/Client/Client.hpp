@@ -15,11 +15,8 @@ class Client{
     public:
         /**
          * @brief Create client.
-         *
-         * Creates a client using given hostname and port.
-         * No connection will be made until connect is called.
          */
-        Client(std::string const& host, int port=25565);
+        Client();
 
         /**
          * @brief Destroy the Client object and disconnect.
@@ -28,19 +25,20 @@ class Client{
         ~Client();
 
         /**
-         * @brief Connects the socket to the server.
+         * @brief Connect to the server.
          * 
          * This will not send a handshake nor
          * any other package.
          * 
+         * @param host the server hostname
+         * @param port the server port
          * @returns whether connecting succeeded
          */
-        bool connect();
+
+        bool connect(std::string const& host, int port=25565);
 
         /**
          * @brief Disconnect from server.
-         * 
-         * Disconnects the socket from the server.
          * 
          * @returns whether disconnecting succeeded
         */
@@ -62,8 +60,6 @@ class Client{
         
 
     private:
-        std::string host;
-        int port;
         bool connected = false;
 
         int serverFD;

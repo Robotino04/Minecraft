@@ -169,6 +169,12 @@ struct PacketCoderImpl<std::vector<T>>{
     static size_t encode(std::deque<uint8_t>& bytes, std::vector<T> const& t);
 };
 
+template<std::floating_point T>
+struct PacketCoderImpl<T>{
+    static size_t decode(DataSource& source, T& t);
+    static size_t encode(std::deque<uint8_t>& bytes, T const& t);
+};
+
 }
 
 #include "Minecraft/PacketCoder.ipp"

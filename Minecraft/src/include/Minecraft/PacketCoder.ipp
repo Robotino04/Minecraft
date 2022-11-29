@@ -2,6 +2,8 @@
 #include <numeric>
 #include <functional>
 
+#include "Minecraft/Utils/NetworkConversions.hpp"
+
 namespace Minecraft{
 
 template<Codable T>
@@ -111,8 +113,16 @@ size_t PacketCoderImpl<T>::decode(DataSource& source, T& t){
 
     uT uValue = 0;
 
-    for (int offset = (sizeof(uT)-1) * 8; offset >= 0; offset -= 8){
-        uValue |= static_cast<uT>(source.pullByte()) << offset;
+
+    if constexpr(std::endian::native == std::endian::big){
+        for (int offset = 0; offset < sizeof(uT) * 8; offset += 8){
+            uValue |= static_cast<uT>(source.pullByte()) << offset;
+        }
+    }
+    else{
+        for (int offset = (sizeof(uT)-1) * 8; offset >= 0; offset -= 8){
+            uValue |= static_cast<uT>(source.pullByte()) << offset;
+        }
     }
 
     t = static_cast<T>(uValue);
@@ -123,9 +133,15 @@ size_t PacketCoderImpl<T>::encode(std::deque<uint8_t>& bytes, T const& t){
     using uT = std::remove_cv_t<std::make_unsigned_t<T>>;
 
     const uT uValue = static_cast<uT>(t);
-
-    for (int offset = (sizeof(uT)-1) * 8; offset >= 0; offset -= 8){
-        bytes.push_back((uValue >> offset) & 0xFF);
+    if constexpr(std::endian::native == std::endian::big){
+        for (int offset = 0; offset < sizeof(T); offset += 8){
+            bytes.push_back((uValue >> offset) & 0xFF);
+        }
+    }
+    else{
+        for (int offset = (sizeof(uT)-1) * 8; offset >= 0; offset -= 8){
+            bytes.push_back((uValue >> offset) & 0xFF);
+        }
     }
     return sizeof(uT);
 }
@@ -158,6 +174,20 @@ size_t PacketCoderImpl<std::vector<T>>::encode(std::deque<uint8_t>& bytes, std::
     return std::accumulate(t.begin(), t.end(), 0, [&bytes](size_t bytesUsed, auto const& x) -> size_t {
             return bytesUsed + PacketCoderImpl<T>::encode(bytes, x);
         });
+}
+
+template<std::floating_point T>
+size_t PacketCoderImpl<T>::decode(DataSource& source, T& t){
+    Utils::Integer<sizeof(T)*8> tmp;
+    size_t bytesUsed = PacketCoder::decode(source, tmp);
+
+    t = std::bit_cast<T>(tmp);
+
+    return bytesUsed;
+}
+template<std::floating_point T>
+size_t PacketCoderImpl<T>::encode(std::deque<uint8_t>& bytes, T const& t){
+    return PacketCoder::encode(bytes, std::bit_cast<Utils::Integer<sizeof(T)*8>>(t));
 }
 
 }
