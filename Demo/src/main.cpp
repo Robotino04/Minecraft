@@ -23,6 +23,7 @@
 void printHelp(std::string const& argv0){
     std::cout << "Usage: " << argv0 << " [options]\n";
     std::cout << "Options:\n\t"
+              << "--log-packets:\t\t Log incoming packets. \n\t"
               << "--log-data:\t\t Log packet data. !!This option prints a lot of data to the terminal and may slow down significantly!!\n\t"
               << "--dump-packets <file>:\t Save all packets to the file.\n\t"
               << "-p, --port <port>\t Connect to a non-default port.\n\t"
@@ -80,9 +81,44 @@ struct KeepAlivePacket{
     )
 };
 
+struct SynchronizePlayerPositionPacket{
+    double x, y, z;
+    float yaw, pitch;
+    uint8_t flags;
+    Minecraft::VarInt teleportID;
+    bool dismountVehicle;
+
+    PACKET_CONTENTS(
+        x, y, z,
+        yaw, pitch,
+        flags,
+        teleportID,
+        dismountVehicle
+    )
+};
+
+struct ConfirmTeleportationPacket{
+    Minecraft::VarInt teleportID;
+    
+    PACKET_CONTENTS(
+        teleportID
+    )
+};
+
+struct SetPlayerPositionPacket{
+    double x, y, z;
+    bool onGround = true;
+
+    PACKET_CONTENTS(
+        x, y, z,
+        onGround
+    )
+};
+
 int main(int argc, const char** argv){
     bool doLogData = false;
     bool doDumpPackets = false;
+    bool doLogPackets = false;
     std::string dumpLocation = "data.bin";
     std::string host = "127.0.0.1";
     uint16_t port = 25566;
@@ -95,7 +131,11 @@ int main(int argc, const char** argv){
                 exit(0);
             }
             else if (arg == "--log-data"){
+                doLogPackets = true;
                 doLogData = true;
+            }
+            else if (arg == "--log-packets"){
+                doLogPackets = true;
             }
             else if (arg == "--dump-packets"){
                 doDumpPackets = true;
@@ -140,7 +180,7 @@ int main(int argc, const char** argv){
     */
 
 
-    Minecraft::Client::Client client(host, port);
+    Minecraft::Client::Client client;
 
     std::ofstream dumpFile;
 
@@ -154,11 +194,12 @@ int main(int argc, const char** argv){
     }
 
     Minecraft::ConnectionState state = Minecraft::ConnectionState::Handshaking;
+    SetPlayerPositionPacket position{.onGround = false};
 
     std::cout << "Waiting for keypress before connecting...\n";
     std::cin.get();
 
-    if (!client.connect()){
+    if (!client.connect(host, port)){
         std::cout << "Connecting failed!\n";
         return 1;
     }
@@ -204,9 +245,24 @@ int main(int argc, const char** argv){
 
     auto inputHandlerFuture = std::async(std::launch::async, [&](){
         std::string word;
-        while ((std::cin >> word, word) != "end");
+        while ((std::cin >> word, word) != "end"){
+            if (word[0] == 'x' || word[0] == 'y' || word[0] == 'z'){
+                char direction = word[0];
+                word.erase(word.begin());
+                double offset = std::stod(word);
+                switch(direction){
+                    case 'x': position.x += offset; break;
+                    case 'y': position.y += offset; break;
+                    case 'z': position.z += offset; break;
+                }
+
+                Minecraft::PacketCoder::encodePacket(client.getSink(), Minecraft::PacketID::SetPlayerPosition, position);
+            }
+        };
         running = false;
     });
+
+
 
     // S→C: Login Success
     while (running){
@@ -229,26 +285,40 @@ int main(int argc, const char** argv){
 
                     // respond with the same contents
                     Minecraft::PacketCoder::encodePacket(client.getSink(), Minecraft::PacketID::KeepAlive_Play_Server, packet);
-                    std::cout << ".";
                 }
                 break;
             }
-            default:{
-                auto data = client.getSource().pullBytes(dataLength);
-                dataLength = 0;
+            case Minecraft::PacketID::SynchronizePlayerPosition:{
+                SynchronizePlayerPositionPacket syncPacket;
+                dataLength -= Minecraft::PacketCoder::decode(client.getSource(), syncPacket);
 
-                std::cout << Minecraft::getPacketDescription(id, state, Minecraft::BindTarget::Client, length);
-                if (doLogData){
-                    std::cout << std::hex << std::uppercase << std::setfill('0');
-                    std::cout << " ---";
-                    for (auto byte : data){
-                        std::cout << " " << std::setw(2) << static_cast<int>(byte);
-                    }
-                    std::cout << " ---";
-                    std::cout << std::dec << std::nouppercase << std::setw(0);
-                }
-                std::cout << "\n";
+                position.x = syncPacket.x;
+                position.y = syncPacket.y;
+                position.z = syncPacket.z;
+
+                ConfirmTeleportationPacket confirmPacket {syncPacket.teleportID};
+                Minecraft::PacketCoder::encodePacket(client.getSink(), Minecraft::PacketID::ConfirmTeleportation, confirmPacket);
+
+                std::cout << "New position: X: " << position.x << " Y: " << position.y << " Z: " << position.z << "\n";
             }
+            default:{
+            }
+        }
+        auto data = client.getSource().pullBytes(dataLength);
+        dataLength = 0;
+
+        if (doLogPackets){
+            std::cout << Minecraft::getPacketDescription(id, state, Minecraft::BindTarget::Client, length);
+            if (doLogData){
+                std::cout << std::hex << std::uppercase << std::setfill('0');
+                std::cout << " ---";
+                for (auto byte : data){
+                    std::cout << " " << std::setw(2) << static_cast<int>(byte);
+                }
+                std::cout << " ---";
+                std::cout << std::dec << std::nouppercase << std::setw(0);
+            }
+            std::cout << "\n";
         }
         client.getSource().pullBytes(dataLength);
     }
