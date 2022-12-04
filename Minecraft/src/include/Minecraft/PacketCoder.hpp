@@ -3,9 +3,14 @@
 #include "Minecraft/PacketID.hpp"
 #include "Minecraft/VarInt.hpp"
 #include "Minecraft/Conditional.hpp"
-#include "Minecraft/Utils/Concepts.hpp"
 #include "Minecraft/DataSink.hpp"
 #include "Minecraft/DataSource.hpp"
+#include "Minecraft/Position.hpp"
+#include "Minecraft/UUID.hpp"
+#include "Minecraft/Codable.hpp"
+
+#include "Minecraft/Utils/Concepts.hpp"
+#include "Minecraft/Utils/Bits.hpp"
 
 #include <deque>
 #include <string>
@@ -16,34 +21,6 @@
 #include <stddef.h>
 
 namespace Minecraft{
-
-/**
- * @brief An en- and decodable thing
- * 
- * Must have a ```contents()``` function returning a
- * tuple of the data to be processed.
- */
-template<typename T>
-concept Codable = requires{
-    std::declval<T>().contents();
-    std::declval<const T>().contents();
-};
-
-/**
- * @brief Declare all functions to make a struct a *Codable*.
- * 
- */
-#define PACKET_CONTENTS(...) \
-    auto contents() { \
-        return std::forward_as_tuple( \
-            __VA_ARGS__ \
-        ); \
-    } \
-    auto contents() const{ \
-        return std::forward_as_tuple( \
-            __VA_ARGS__ \
-        ); \
-    }
 
 /**
  * 
@@ -146,8 +123,8 @@ struct PacketCoderImpl<VarInteger<SIZE>>{
     static size_t decode(DataSource& source, VarInteger<SIZE>& t);
     static size_t encode(std::deque<uint8_t>& bytes, VarInteger<SIZE> const& t);
 
-    static constexpr uint8_t DATA_BITS = 0b01111111;
-    static constexpr uint8_t CONTINUE_BIT = 0b10000000;
+    static constexpr uint8_t DATA_BITS = Minecraft::Utils::binaryOnes<7>;
+    static constexpr uint8_t CONTINUE_BIT = ~DATA_BITS;
 
 };
 
@@ -173,6 +150,12 @@ template<std::floating_point T>
 struct PacketCoderImpl<T>{
     static size_t decode(DataSource& source, T& t);
     static size_t encode(std::deque<uint8_t>& bytes, T const& t);
+};
+
+template<>
+struct PacketCoderImpl<Position>{
+    static size_t decode(DataSource& source, Position& t);
+    static size_t encode(std::deque<uint8_t>& bytes, Position const& t);
 };
 
 }

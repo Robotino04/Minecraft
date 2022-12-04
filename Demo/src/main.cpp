@@ -6,6 +6,7 @@
 #include <fstream>
 #include <tuple>
 #include <future>
+#include <algorithm>
 
 #include <strings.h>
 #include <cstring>
@@ -19,6 +20,28 @@
 #include "Minecraft/PacketCoder.hpp"
 #include "Minecraft/ConnectionState.hpp"
 #include "Minecraft/BindTarget.hpp"
+#include "Minecraft/Hand.hpp"
+#include "Minecraft/Face.hpp"
+#include "Minecraft/Angle.hpp"
+
+#include "Minecraft/Utils/IO.hpp"
+
+// Packets
+#include "Minecraft/Packets/Login/Serverbound/HandshakePacket.hpp"
+#include "Minecraft/Packets/Login/Serverbound/LoginStartPacket.hpp"
+
+#include "Minecraft/Packets/Play/Clientbound/KeepAlive.hpp"
+#include "Minecraft/Packets/Play/Clientbound/SetHealthPacket.hpp"
+#include "Minecraft/Packets/Play/Clientbound/SpawnPlayerPacket.hpp"
+#include "Minecraft/Packets/Play/Clientbound/SynchronizePlayerPositionPacket.hpp"
+#include "Minecraft/Packets/Play/Clientbound/TeleportEntityPacket.hpp"
+#include "Minecraft/Packets/Play/Clientbound/UpdateEntityPositionAndRotationPacket.hpp"
+#include "Minecraft/Packets/Play/Clientbound/UpdateEntityPositionPacket.hpp"
+#include "Minecraft/Packets/Play/Clientbound/UpdateEntityRotationPacket.hpp"
+
+#include "Minecraft/Packets/Play/Serverbound/ConfirmTeleportationPacket.hpp"
+#include "Minecraft/Packets/Play/Serverbound/SetPlayerPositionPacket.hpp"
+#include "Minecraft/Packets/Play/Serverbound/UseItemOnPacket.hpp"
 
 void printHelp(std::string const& argv0){
     std::cout << "Usage: " << argv0 << " [options]\n";
@@ -35,85 +58,14 @@ void printMissingArgument(std::string const& required, std::string const& arg, s
 }
 
 
-struct HandshakePacket{
-    Minecraft::VarInt protocolVersion;
-    std::string host;
-    uint16_t port;
-    Minecraft::VarInt newConnectionState;
-
-    PACKET_CONTENTS(
-        protocolVersion,
-        host,
-        port,
-        newConnectionState
-    )
-};
-
-struct LoginStartPacket{
-    std::string name;
-    bool hasSigData;
-    Minecraft::Conditional<int64_t> timestamp = Minecraft::Conditional<int64_t>(hasSigData);
-    Minecraft::Conditional<Minecraft::VarInt> publicKeyLength = Minecraft::Conditional<Minecraft::VarInt>(hasSigData);
-    Minecraft::Conditional<std::vector<uint8_t>> publicKey = Minecraft::Conditional<std::vector<uint8_t>>(hasSigData);
-    Minecraft::Conditional<Minecraft::VarInt> signatureLength = Minecraft::Conditional<Minecraft::VarInt>(hasSigData);
-    Minecraft::Conditional<std::vector<uint8_t>> signature = Minecraft::Conditional<std::vector<uint8_t>>(hasSigData);
-    bool hasPlayerUUID;
-    // Minecraft::Conditional<Minecraft::UUID> playerUUID = Minecraft::Conditional<Minecraft::UUID>(hasPlayerUUID);
-
-
-    PACKET_CONTENTS(
-        name,
-        hasSigData,
-        timestamp,
-        publicKeyLength,
-        publicKey,
-        signatureLength,
-        signature,
-        hasPlayerUUID
-    )
-};
-
-struct KeepAlivePacket{
-    int64_t keepAliveID;
-
-    PACKET_CONTENTS(
-        keepAliveID
-    )
-};
-
-struct SynchronizePlayerPositionPacket{
-    double x, y, z;
-    float yaw, pitch;
-    uint8_t flags;
-    Minecraft::VarInt teleportID;
-    bool dismountVehicle;
-
-    PACKET_CONTENTS(
-        x, y, z,
-        yaw, pitch,
-        flags,
-        teleportID,
-        dismountVehicle
-    )
-};
-
-struct ConfirmTeleportationPacket{
-    Minecraft::VarInt teleportID;
-    
-    PACKET_CONTENTS(
-        teleportID
-    )
-};
-
-struct SetPlayerPositionPacket{
+struct PlayerState{
     double x, y, z;
     bool onGround = true;
-
-    PACKET_CONTENTS(
-        x, y, z,
-        onGround
-    )
+    float health;
+    Minecraft::VarInt food;
+    float foodSaturation;
 };
+
 
 int main(int argc, const char** argv){
     bool doLogData = false;
@@ -194,7 +146,10 @@ int main(int argc, const char** argv){
     }
 
     Minecraft::ConnectionState state = Minecraft::ConnectionState::Handshaking;
-    SetPlayerPositionPacket position{.onGround = false};
+    PlayerState player{
+        .onGround = false,
+    };
+    std::vector<Minecraft::SpawnPlayerPacket> otherPlayers;
 
     std::cout << "Waiting for keypress before connecting...\n";
     std::cin.get();
@@ -205,12 +160,10 @@ int main(int argc, const char** argv){
     }
     std::cout << "connected\n";
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
 
     // C→S: Handshake with Next State set to 2 (login)
     {
-        HandshakePacket packet{
+        Minecraft::HandshakePacket packet{
             .protocolVersion = 760,
             .host = host,
             .port = port,
@@ -220,11 +173,10 @@ int main(int argc, const char** argv){
         Minecraft::PacketCoder::encodePacket(client.getSink(), Minecraft::PacketID::Handshake, packet);
         state = Minecraft::ConnectionState::Login;
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
     // C→S: Login Start
     {
-        LoginStartPacket packet;
+        Minecraft::LoginStartPacket packet;
         packet.name = "MinecraftBot";
         packet.hasSigData = false;
         packet.hasPlayerUUID = false;
@@ -251,12 +203,64 @@ int main(int argc, const char** argv){
                 word.erase(word.begin());
                 double offset = std::stod(word);
                 switch(direction){
-                    case 'x': position.x += offset; break;
-                    case 'y': position.y += offset; break;
-                    case 'z': position.z += offset; break;
+                    case 'x': player.x += offset; break;
+                    case 'y': player.y += offset; break;
+                    case 'z': player.z += offset; break;
                 }
 
-                Minecraft::PacketCoder::encodePacket(client.getSink(), Minecraft::PacketID::SetPlayerPosition, position);
+                Minecraft::SetPlayerPositionPacket packet{
+                    .x = player.x,
+                    .y = player.y,
+                    .z = player.z,
+                    .onGround = player.onGround,
+                };
+
+                Minecraft::PacketCoder::encodePacket(client.getSink(), Minecraft::PacketID::SetPlayerPosition, packet);
+            }
+
+            else if (word == "place"){
+                Minecraft::UseItemOnPacket packet{
+                    .hand = Minecraft::Hand::MainHand,
+                    .face = Minecraft::Face::Top,
+                    .cursorPositionX = 0.5,
+                    .cursorPositionY = 1,
+                    .cursorPositionZ = 0.5,
+                    .insideBlock = false,
+                    .sequence = 1,
+                };
+
+                std::cin >> packet.location.x;
+                std::cin >> packet.location.y;
+                std::cin >> packet.location.z;
+
+                Minecraft::PacketCoder::encodePacket(client.getSink(), Minecraft::PacketID::UseItemOn, packet);
+                std::cout << "Placed Block\n";
+            }
+            else if (word == "hide"){
+                Minecraft::UseItemOnPacket packet{
+                    .hand = Minecraft::Hand::MainHand,
+                    .face = Minecraft::Face::Top,
+                    .cursorPositionX = 0.5,
+                    .cursorPositionY = 1,
+                    .cursorPositionZ = 0.5,
+                    .insideBlock = false,
+                    .sequence = 1,
+                };
+
+                for (int y=-1; y<=2;y++){
+                    for (int x=-1; x<=1;x++){
+                        for (int z=-1; z<=1;z++){
+                            if (x == 0 && z == 0 && (y == 0 || y == 1)) continue;
+
+                            packet.location.x = player.x + x - .5;
+                            packet.location.y = player.y + y;
+                            packet.location.z = player.z + z - .5;
+
+                            Minecraft::PacketCoder::encodePacket(client.getSink(), Minecraft::PacketID::UseItemOn, packet);
+                        }
+                    }
+                }
+                std::cout << "Hidden\n";
             }
         };
         running = false;
@@ -272,15 +276,21 @@ int main(int argc, const char** argv){
 
         switch(id){
             case Minecraft::PacketID::LoginSuccess:{
-                if (state == Minecraft::ConnectionState::Login){
+                if (state == Minecraft::ConnectionState::Login){ // Minecraft::PacketID::LoginSuccess
                     std::cout << "Login successfull!\n";
                     state = Minecraft::ConnectionState::Play;
+                }
+                else if (state == Minecraft::ConnectionState::Play){ // Minecraft::PacketID::SpawnPlayer
+                    Minecraft::SpawnPlayerPacket& packet = otherPlayers.emplace_back();
+                    dataLength -= Minecraft::PacketCoder::decode(client.getSource(), packet);
+
+                    std::cout << "New player at " << Minecraft::Utils::formatPositioned(packet) << "\n";
                 }
                 break;
             }
             case Minecraft::PacketID::KeepAlive_Play_Client:{
                 if (state == Minecraft::ConnectionState::Play){
-                    KeepAlivePacket packet;
+                    Minecraft::KeepAlivePacket packet;
                     dataLength -= Minecraft::PacketCoder::decode(client.getSource(), packet);
 
                     // respond with the same contents
@@ -289,19 +299,99 @@ int main(int argc, const char** argv){
                 break;
             }
             case Minecraft::PacketID::SynchronizePlayerPosition:{
-                SynchronizePlayerPositionPacket syncPacket;
+                Minecraft::SynchronizePlayerPositionPacket syncPacket;
                 dataLength -= Minecraft::PacketCoder::decode(client.getSource(), syncPacket);
 
-                position.x = syncPacket.x;
-                position.y = syncPacket.y;
-                position.z = syncPacket.z;
+                player.x = syncPacket.x;
+                player.y = syncPacket.y;
+                player.z = syncPacket.z;
 
-                ConfirmTeleportationPacket confirmPacket {syncPacket.teleportID};
+                Minecraft::ConfirmTeleportationPacket confirmPacket {syncPacket.teleportID};
                 Minecraft::PacketCoder::encodePacket(client.getSink(), Minecraft::PacketID::ConfirmTeleportation, confirmPacket);
 
-                std::cout << "New position: X: " << position.x << " Y: " << position.y << " Z: " << position.z << "\n";
+                std::cout << "New position: " << Minecraft::Utils::formatPositioned(player) << "\n";
+                break;
             }
-            default:{
+            case Minecraft::PacketID::SetHealth:{
+                Minecraft::SetHealthPacket packet;
+                dataLength -= Minecraft::PacketCoder::decode(client.getSource(), packet);
+
+                player.health = packet.health;
+                player.food = packet.food;
+                player.foodSaturation = packet.foodSaturation;
+
+                std::cout << "New health: Health: " << player.health << " Food: " << player.food << " Saturation: " << player.foodSaturation << "\n";
+                break;
+            }
+            case Minecraft::PacketID::UpdateEntityPosition:{
+                Minecraft::UpdateEntityPositionPacket packet;
+                dataLength -= Minecraft::PacketCoder::decode(client.getSource(), packet);
+
+                auto entityIt = std::find_if(otherPlayers.begin(), otherPlayers.end(), [&](auto const& other){return packet.entityID == other.entityID;});
+                if (entityIt == otherPlayers.end()){
+                    std::cout << "Invalid UpdateEntityPosition packet\n";
+                }
+                else{
+                    entityIt->x += static_cast<double>(packet.dX) / 4096.0;
+                    entityIt->y += static_cast<double>(packet.dY) / 4096.0;
+                    entityIt->z += static_cast<double>(packet.dZ) / 4096.0;
+                    std::cout << "New entity position: " << Minecraft::Utils::formatPositioned(*entityIt) << " (P)\n";
+                }
+                break;
+            }
+            case Minecraft::PacketID::UpdateEntityPositionAndRotation:{
+                Minecraft::UpdateEntityPositionAndRotationPacket packet;
+                dataLength -= Minecraft::PacketCoder::decode(client.getSource(), packet);
+
+                auto entityIt = std::find_if(otherPlayers.begin(), otherPlayers.end(), [&](auto const& other){return packet.entityID == other.entityID;});
+                if (entityIt == otherPlayers.end()){
+                    std::cout << "Invalid UpdateEntityPositionAndRotation packet\n";
+                }
+                else{
+                    entityIt->x += static_cast<double>(packet.dX) / 4096.0;
+                    entityIt->y += static_cast<double>(packet.dY) / 4096.0;
+                    entityIt->z += static_cast<double>(packet.dZ) / 4096.0;
+
+                    entityIt->yaw = packet.yaw;
+                    entityIt->pitch = packet.pitch;
+
+                    std::cout << "New entity position: " << Minecraft::Utils::formatPositioned(*entityIt) << " (P&R)\n";
+                }
+                break;
+            }
+            case Minecraft::PacketID::UpdateEntityRotation:{
+                Minecraft::UpdateEntityRotationPacket packet;
+                dataLength -= Minecraft::PacketCoder::decode(client.getSource(), packet);
+
+                auto entityIt = std::find_if(otherPlayers.begin(), otherPlayers.end(), [&](auto const& other){return packet.entityID == other.entityID;});
+                if (entityIt == otherPlayers.end()){
+                    std::cout << "Invalid UpdateEntityRotation packet\n";
+                }
+                else{
+                    entityIt->yaw = packet.yaw;
+                    entityIt->pitch = packet.pitch;
+                }
+                break;
+            }
+            case Minecraft::PacketID::TeleportEntity:{
+                Minecraft::TeleportEntityPacket packet;
+                dataLength -= Minecraft::PacketCoder::decode(client.getSource(), packet);
+
+                auto entityIt = std::find_if(otherPlayers.begin(), otherPlayers.end(), [&](auto const& other){return packet.entityID == other.entityID;});
+                if (entityIt == otherPlayers.end()){
+                    std::cout << "Invalid TeleportEntity packet\n";
+                }
+                else{
+                    entityIt->x = packet.x;
+                    entityIt->y = packet.y;
+                    entityIt->z = packet.z;
+
+                    entityIt->yaw = packet.yaw;
+                    entityIt->pitch = packet.pitch;
+
+                    std::cout << "New entity position: " << Minecraft::Utils::formatPositioned(*entityIt) << " (TP)\n";
+                }
+                break;
             }
         }
         auto data = client.getSource().pullBytes(dataLength);

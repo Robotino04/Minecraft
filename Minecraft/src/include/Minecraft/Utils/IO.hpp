@@ -6,6 +6,7 @@
 #include <vector>
 #include <iomanip>
 #include <ios>
+#include <utility>
 
 namespace Minecraft::Utils{
 
@@ -38,6 +39,18 @@ inline std::string formatVectorContents(std::vector<T> const& vec){
     s.erase(std::prev(s.end()));
     s.erase(std::prev(s.end()));
     return s;
+}
+
+template<typename T>
+concept Positioned = requires{
+    std::declval<T>().x;
+    std::declval<T>().y;
+    std::declval<T>().z;
+};
+
+template<Positioned T>
+inline std::string formatPositioned(T const& thing){
+    return "X: " + std::to_string(thing.x) + " Y: " + std::to_string(thing.y) + " Z: " + std::to_string(thing.z);
 }
 
 }

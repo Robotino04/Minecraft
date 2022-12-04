@@ -1,23 +1,17 @@
 from twisted.internet import reactor
 from quarry.net.proxy import DownstreamFactory, Bridge
-import quarry.net
+from hotreload import Loader
 
-numPackets = 0
+import sys
+import os
+
+os.chdir(os.path.dirname(__file__))
+
+script = Loader("simpleProxyScript.py")
+
 class ExampleBridge(Bridge):
     def packet_unhandled(self, buff, direction, name):
-        global numPackets
-        numPackets += 1
-
-        if (name == "join_game"):
-            numPackets = 0
-            print("-- new connection --")
-
-        if direction == "downstream":
-            if (numPackets < 10): print(f"[S->C] {name}")
-            self.downstream.send_packet(name, buff.read())
-        elif direction == "upstream":
-            if (numPackets < 10): print(f"[C->S] {name}")
-            self.upstream.send_packet(name, buff.read())
+        script.packet_unhandled(self, buff, direction, name)
 
 
 def main(argv):

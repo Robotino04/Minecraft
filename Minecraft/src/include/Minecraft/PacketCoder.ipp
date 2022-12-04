@@ -3,6 +3,7 @@
 #include <functional>
 
 #include "Minecraft/Utils/NetworkConversions.hpp"
+#include "Minecraft/Utils/Bits.hpp"
 
 namespace Minecraft{
 
@@ -188,6 +189,24 @@ size_t PacketCoderImpl<T>::decode(DataSource& source, T& t){
 template<std::floating_point T>
 size_t PacketCoderImpl<T>::encode(std::deque<uint8_t>& bytes, T const& t){
     return PacketCoder::encode(bytes, std::bit_cast<Utils::Integer<sizeof(T)*8>>(t));
+}
+
+size_t PacketCoderImpl<Position>::decode(DataSource& source, Position& t){
+    uint64_t rawValue;
+    size_t bytesUsed = PacketCoderImpl<uint64_t>::decode(source, rawValue);
+
+    t.x = (rawValue >> 38) & Utils::binaryOnes<26>;
+    t.z = (rawValue >> 12) & Utils::binaryOnes<26>;
+    t.y = (rawValue >> 0 ) & Utils::binaryOnes<12>;
+
+    if (t.x >= 1 << 25) t.x -= 1 << 26;
+    if (t.y >= 1 << 11) t.y -= 1 << 12;
+    if (t.z >= 1 << 25) t.z -= 1 << 26;
+
+    return bytesUsed;
+}
+size_t PacketCoderImpl<Position>::encode(std::deque<uint8_t>& bytes, Position const& t){
+    return PacketCoderImpl<uint64_t>::encode(bytes, ((t.x & Utils::binaryOnes<26>) << 38) | ((t.z & Utils::binaryOnes<26>) << 12) | (t.y & Utils::binaryOnes<12>));
 }
 
 }
