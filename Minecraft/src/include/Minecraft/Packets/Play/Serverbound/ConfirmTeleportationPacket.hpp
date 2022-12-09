@@ -6,7 +6,7 @@
 namespace Minecraft{
 
 struct ConfirmTeleportationPacket{
-    Minecraft::VarInt teleportID;
+    VarInt teleportID;
     
     CODABLE_CONTENTS(
         teleportID

@@ -1,5 +1,7 @@
 #pragma  once
 
+#include "Minecraft/EnumEncodingType.hpp"
+
 namespace Minecraft{
 
 enum Face{
@@ -11,4 +13,8 @@ enum Face{
     East = 5,
 };
 
+template<>
+struct EnumCodingType<Face>{
+    using type = VarInt;
+};
 }

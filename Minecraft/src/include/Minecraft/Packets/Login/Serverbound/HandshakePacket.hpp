@@ -2,16 +2,17 @@
 
 #include "Minecraft/Codable.hpp"
 #include "Minecraft/VarInt.hpp"
+#include "Minecraft/ConnectionState.hpp"
 
 #include <string>
 
 namespace Minecraft{
 
 struct HandshakePacket{
-    Minecraft::VarInt protocolVersion;
+    VarInt protocolVersion;
     std::string host;
     uint16_t port;
-    Minecraft::VarInt newConnectionState;
+    ConnectionState newConnectionState;
 
     CODABLE_CONTENTS(
         protocolVersion,

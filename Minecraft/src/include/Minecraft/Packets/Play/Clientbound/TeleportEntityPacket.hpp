@@ -7,9 +7,9 @@
 namespace Minecraft{
 
 struct TeleportEntityPacket{
-    Minecraft::VarInt entityID;
+    VarInt entityID;
     double x, y, z;
-    Minecraft::Angle yaw, pitch;
+    Angle yaw, pitch;
     bool onGround;
 
     CODABLE_CONTENTS(

@@ -3,16 +3,18 @@
 #include "Minecraft/Codable.hpp"
 #include "Minecraft/VarInt.hpp"
 #include "Minecraft/Position.hpp"
+#include "Minecraft/Face.hpp"
+#include "Minecraft/Hand.hpp"
 
 namespace Minecraft{
 
 struct UseItemOnPacket{
-    Minecraft::VarInt hand;
-    Minecraft::Position location;
-    Minecraft::VarInt face;
+    Hand hand;
+    Position location;
+    Face face;
     float cursorPositionX, cursorPositionY, cursorPositionZ;
     bool insideBlock;
-    Minecraft::VarInt sequence;
+    VarInt sequence;
 
     CODABLE_CONTENTS(
         hand,

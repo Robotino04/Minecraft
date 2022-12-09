@@ -6,17 +6,17 @@
 namespace Minecraft::Utils{
 
 namespace Detail{
-    template<uint SIZE>
-    struct Integer;
+    template<unsigned int SIZE>
+    struct __Integer;
 
     template<>
-    struct Integer<8>{using type = int8_t;};
+    struct __Integer<8>{using type = int8_t;};
     template<>
-    struct Integer<16>{using type = int16_t;};
+    struct __Integer<16>{using type = int16_t;};
     template<>
-    struct Integer<32>{using type = int32_t;};
+    struct __Integer<32>{using type = int32_t;};
     template<>
-    struct Integer<64>{using type = int64_t;};
+    struct __Integer<64>{using type = int64_t;};
 }
 
 /**
@@ -25,7 +25,7 @@ namespace Detail{
  * @tparam SIZE minimal number of bits 
  */
 template<int SIZE>
-using Integer = typename Detail::Integer<SIZE>::type;
+using Integer = typename Detail::__Integer<SIZE>::type;
 
 
 /**

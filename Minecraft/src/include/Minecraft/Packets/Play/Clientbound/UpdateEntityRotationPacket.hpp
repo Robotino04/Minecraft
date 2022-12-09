@@ -7,8 +7,8 @@
 namespace Minecraft{
 
 struct UpdateEntityRotationPacket{
-    Minecraft::VarInt entityID;
-    Minecraft::Angle yaw, pitch;
+    VarInt entityID;
+    Angle yaw, pitch;
     bool onGround;
 
     CODABLE_CONTENTS(
