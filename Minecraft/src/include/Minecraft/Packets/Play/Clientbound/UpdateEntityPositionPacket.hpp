@@ -6,7 +6,7 @@
 namespace Minecraft{
 
 struct UpdateEntityPositionPacket{
-    Minecraft::VarInt entityID;
+    VarInt entityID;
     int16_t dX, dY, dZ;
     bool onGround;
 

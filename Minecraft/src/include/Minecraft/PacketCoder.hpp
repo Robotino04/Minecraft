@@ -8,6 +8,7 @@
 #include "Minecraft/Position.hpp"
 #include "Minecraft/UUID.hpp"
 #include "Minecraft/Codable.hpp"
+#include "Minecraft/EnumEncodingType.hpp"
 
 #include "Minecraft/Utils/Concepts.hpp"
 #include "Minecraft/Utils/Bits.hpp"
@@ -128,7 +129,7 @@ struct PacketCoderImpl<VarInteger<SIZE>>{
 
 };
 
-template<Utils::Concepts::integer T>
+template<Utils::Concepts::Integer T>
 struct PacketCoderImpl<T>{
     static size_t decode(DataSource& source, T& t);
     static size_t encode(std::deque<uint8_t>& bytes, T const& t);
@@ -156,6 +157,12 @@ template<>
 struct PacketCoderImpl<Position>{
     static size_t decode(DataSource& source, Position& t);
     static size_t encode(std::deque<uint8_t>& bytes, Position const& t);
+};
+
+template<CodableEnum T>
+struct PacketCoderImpl<T>{
+    static size_t decode(DataSource& source, T& t);
+    static size_t encode(std::deque<uint8_t>& bytes, T const& t);
 };
 
 }

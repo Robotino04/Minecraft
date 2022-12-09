@@ -8,10 +8,10 @@
 namespace Minecraft{
 
 struct SpawnPlayerPacket{
-    Minecraft::VarInt entityID;
-    Minecraft::UUID playerUUID;
+    VarInt entityID;
+    UUID playerUUID;
     double x, y, z;
-    Minecraft::Angle yaw, pitch;
+    Angle yaw, pitch;
 
     CODABLE_CONTENTS(
         entityID,

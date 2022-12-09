@@ -38,6 +38,7 @@
 #include "Minecraft/Packets/Play/Clientbound/UpdateEntityPositionAndRotationPacket.hpp"
 #include "Minecraft/Packets/Play/Clientbound/UpdateEntityPositionPacket.hpp"
 #include "Minecraft/Packets/Play/Clientbound/UpdateEntityRotationPacket.hpp"
+#include "Minecraft/Packets/Play/Clientbound/PlayerCommandPacket.hpp"
 
 #include "Minecraft/Packets/Play/Serverbound/ConfirmTeleportationPacket.hpp"
 #include "Minecraft/Packets/Play/Serverbound/SetPlayerPositionPacket.hpp"
@@ -64,6 +65,7 @@ struct PlayerState{
     float health;
     Minecraft::VarInt food;
     float foodSaturation;
+    Minecraft::VarInt entityID;
 };
 
 
@@ -167,7 +169,7 @@ int main(int argc, const char** argv){
             .protocolVersion = 760,
             .host = host,
             .port = port,
-            .newConnectionState = static_cast<int>(Minecraft::ConnectionState::Login),
+            .newConnectionState = Minecraft::ConnectionState::Login,
         };
         
         Minecraft::PacketCoder::encodePacket(client.getSink(), Minecraft::PacketID::Handshake, packet);
@@ -262,6 +264,42 @@ int main(int argc, const char** argv){
                 }
                 std::cout << "Hidden\n";
             }
+            else if (word == "sneak"){
+                Minecraft::PlayerCommandPacket packet{
+                    .entityID = player.entityID,
+                    .actionID = Minecraft::PlayerCommandAction::startSneaking,
+                    .jumpBoost = 0,
+                };
+
+                Minecraft::PacketCoder::encodePacket(client.getSink(), Minecraft::PacketID::PlayerCommand, packet);
+            }
+            else if (word == "unsneak"){
+                Minecraft::PlayerCommandPacket packet{
+                    .entityID = player.entityID,
+                    .actionID = Minecraft::PlayerCommandAction::stopSneaking,
+                    .jumpBoost = 0,
+                };
+
+                Minecraft::PacketCoder::encodePacket(client.getSink(), Minecraft::PacketID::PlayerCommand, packet);
+            }
+            else if (word == "sprint"){
+                Minecraft::PlayerCommandPacket packet{
+                    .entityID = player.entityID,
+                    .actionID = Minecraft::PlayerCommandAction::startSprinting,
+                    .jumpBoost = 0,
+                };
+
+                Minecraft::PacketCoder::encodePacket(client.getSink(), Minecraft::PacketID::PlayerCommand, packet);
+            }
+            else if (word == "unsprint"){
+                Minecraft::PlayerCommandPacket packet{
+                    .entityID = player.entityID,
+                    .actionID = Minecraft::PlayerCommandAction::stopSprinting,
+                    .jumpBoost = 0,
+                };
+
+                Minecraft::PacketCoder::encodePacket(client.getSink(), Minecraft::PacketID::PlayerCommand, packet);
+            }
         };
         running = false;
     });
@@ -285,6 +323,13 @@ int main(int argc, const char** argv){
                     dataLength -= Minecraft::PacketCoder::decode(client.getSource(), packet);
 
                     std::cout << "New player at " << Minecraft::Utils::formatPositioned(packet) << "\n";
+                }
+                break;
+            }
+            case Minecraft::PacketID::Login:{
+                if (state == Minecraft::ConnectionState::Play){ // Minecraft::PacketID::SpawnPlayer
+                    dataLength -= Minecraft::PacketCoder::decode(client.getSource(), player.entityID.value);
+                    std::cout << "Player Entity ID: 0x" << std::hex << std::uppercase << player.entityID << std::nouppercase << std::dec << "\n";
                 }
                 break;
             }

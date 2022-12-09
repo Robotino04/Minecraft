@@ -108,7 +108,7 @@ size_t PacketCoderImpl<VarInteger<SIZE>>::encode(std::deque<uint8_t>& bytes, Var
     return usedBytes;
 }
 
-template<Utils::Concepts::integer T>
+template<Utils::Concepts::Integer T>
 size_t PacketCoderImpl<T>::decode(DataSource& source, T& t){
     using uT = std::remove_cv_t<std::make_unsigned_t<T>>;
 
@@ -129,7 +129,7 @@ size_t PacketCoderImpl<T>::decode(DataSource& source, T& t){
     t = static_cast<T>(uValue);
     return sizeof(uT);
 }
-template<Utils::Concepts::integer T>
+template<Utils::Concepts::Integer T>
 size_t PacketCoderImpl<T>::encode(std::deque<uint8_t>& bytes, T const& t){
     using uT = std::remove_cv_t<std::make_unsigned_t<T>>;
 
@@ -207,6 +207,17 @@ size_t PacketCoderImpl<Position>::decode(DataSource& source, Position& t){
 }
 size_t PacketCoderImpl<Position>::encode(std::deque<uint8_t>& bytes, Position const& t){
     return PacketCoderImpl<uint64_t>::encode(bytes, ((t.x & Utils::binaryOnes<26>) << 38) | ((t.z & Utils::binaryOnes<26>) << 12) | (t.y & Utils::binaryOnes<12>));
+}
+
+
+template<CodableEnum T>
+size_t PacketCoderImpl<T>::decode(DataSource& source, T& t){
+    return PacketCoderImpl<EnumCodingType_t<T>>::decode(source, static_cast<EnumCodingType_t<T>>(t));
+}
+template<CodableEnum T>
+size_t PacketCoderImpl<T>::encode(std::deque<uint8_t>& bytes, T const& t){
+    return PacketCoderImpl<EnumCodingType_t<T>>::encode(bytes, static_cast<EnumCodingType_t<T>>(t));
+
 }
 
 }

@@ -7,7 +7,7 @@ namespace Minecraft{
 
 struct SetHealthPacket{
     float health;
-    Minecraft::VarInt food;
+    VarInt food;
     float foodSaturation;
 
     CODABLE_CONTENTS(
