@@ -43,6 +43,7 @@
 #include "Minecraft/Packets/Play/Serverbound/ConfirmTeleportationPacket.hpp"
 #include "Minecraft/Packets/Play/Serverbound/SetPlayerPositionPacket.hpp"
 #include "Minecraft/Packets/Play/Serverbound/UseItemOnPacket.hpp"
+#include "Minecraft/Packets/Play/Serverbound/ChatCommandPacket.hpp"
 
 void printHelp(std::string const& argv0){
     std::cout << "Usage: " << argv0 << " [options]\n";
@@ -299,6 +300,17 @@ int main(int argc, const char** argv){
                 };
 
                 Minecraft::PacketCoder::encodePacket(client.getSink(), Minecraft::PacketID::PlayerCommand, packet);
+            }
+            else if (word[0] == '/'){
+                Minecraft::ChatCommandPacket packet;
+                while (word != ";"){
+                    auto arg = packet.signedArguments.emplace_back();
+                    std::cin >> word;
+                    arg.name = word;
+                }
+                packet.numSignedArguments = packet.signedArguments.size();
+                
+                Minecraft::PacketCoder::encodePacket(client.getSink(), Minecraft::PacketID::ChatCommand, packet);
             }
         };
         running = false;
